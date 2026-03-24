@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <h1>MalariaGEN</h1>
+        <h2>Genomic Data Portal</h2>
+        <p>Sign in to access the NLP-powered genomic data query interface.</p>
+        <a href="{{ url_for('main.login') }}" class="btn-google">Sign in with Google</a>
+        <p class="footer-text">MalariaGEN Vector Observatory</p>
+    </div>
+</div>
+{% endblock %}

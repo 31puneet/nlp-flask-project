@@ -1,6 +1,13 @@
-# Dev environment
-pip
-autopep8
-
-# App
 flask
+authlib
+requests
+malariagen_data
+openai
+pydantic
+pandas
+numpy
+google-auth
+google-auth-oauthlib
+python-dotenv
+plotly
+lxml

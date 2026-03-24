@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h3>MalariaGEN Data Portal</h3>
+        </div>
+        <button class="btn-new-chat" onclick="newChat()">+ New Chat</button>
+        <div class="sidebar-section">
+            <p class="label">Signed In As</p>
+            <p class="value">{{ user.email }}</p>
+        </div>
+        <div class="sidebar-section">
+            <p class="label">Storage Connection</p>
+            <p class="value status-online">Online</p>
+        </div>
+        <div class="sidebar-section">
+            <p class="label">NLP Pipeline</p>
+            <p class="value status-online">Active</p>
+        </div>
+        <div class="sidebar-section">
+            <p class="label">Authorized Datasets</p>
+            <pre>Ag3: Anopheles gambiae
+Af1: Anopheles funestus
+Pf8: P. falciparum</pre>
+        </div>
+        <div class="sidebar-section">
+            <p class="label">Example Queries</p>
+            <div class="example-queries">
+                <button class="example-btn" onclick="useExample(this)">How many samples are from Kenya?</button>
+                <button class="example-btn" onclick="useExample(this)">Show kdr mutation frequencies in West Africa</button>
+                <button class="example-btn" onclick="useExample(this)">Show amino acid changes in Ace1 gene across East Africa</button>
+                <button class="example-btn" onclick="useExample(this)">What species are in the latest release?</button>
+            </div>
+        </div>
+        <a href="{{ url_for('main.logout') }}" class="btn-logout">Logout</a>
+        <p class="sidebar-footer">MalariaGEN Vector Observatory</p>
+    </aside>
+    <main class="content">
+        <div class="chat-container" id="chatContainer">
+            <div class="chat-message assistant-message">
+                <div class="message-sender">MalariaGEN Assistant</div>
+                <div class="message-body">Welcome to the MalariaGEN Genomic Data Portal. Ask any question about malaria vector genomic data in plain English — no coding required.</div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="queryInput" placeholder="Ask about malaria genomic data..." autocomplete="off">
+            <button id="executeBtn" onclick="executeQuery()">Send</button>
+        </div>
+    </main>
+</div>
+<script>
+function getTimestamp() {
+    var now = new Date();
+    var h = now.getHours();
+    var m = now.getMinutes();
+    var ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    m = m < 10 ? "0" + m : m;
+    return h + ":" + m + " " + ampm;
+}
+
+function useExample(btn) {
+    document.getElementById("queryInput").value = btn.textContent;
+    executeQuery();
+}
+
+async function newChat() {
+    await fetch("/clear-history", {method: "POST"});
+    var container = document.getElementById("chatContainer");
+    container.innerHTML = '';
+    var div = document.createElement("div");
+    div.className = "chat-message assistant-message";
+    div.innerHTML = '<div class="message-sender">MalariaGEN Assistant</div><div class="message-body">Chat cleared. How can I help you?</div>';
+    container.appendChild(div);
+}
+
+function appendMessage(role, content) {
+    var container = document.getElementById("chatContainer");
+    var div = document.createElement("div");
+    div.className = "chat-message " + role + "-message";
+    var header = document.createElement("div");
+    header.className = "message-header";
+    var sender = document.createElement("span");
+    sender.className = "message-sender";
+    sender.textContent = role === "user" ? "You" : "MalariaGEN Assistant";
+    var time = document.createElement("span");
+    time.className = "message-time";
+    time.textContent = getTimestamp();
+    header.appendChild(sender);
+    header.appendChild(time);
+    div.appendChild(header);
+    var body = document.createElement("div");
+    body.className = "message-body";
+    if (typeof content === "string") {
+        body.innerHTML = content;
+    } else {
+        body.appendChild(content);
+    }
+    div.appendChild(body);
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return body;
+}
+
+function copyCode(btn) {
+    var code = btn.parentElement.querySelector("pre").textContent;
+    navigator.clipboard.writeText(code);
+    btn.textContent = "Copied";
+    setTimeout(function() { btn.textContent = "Copy"; }, 1500);
+}
+
+function exportCSV(btn) {
+    var tableWrap = btn.closest(".message-body").querySelector(".result-table-wrap");
+    if (!tableWrap) return;
+    var table = tableWrap.querySelector("table");
+    if (!table) return;
+    var csv = [];
+    var rows = table.querySelectorAll("tr");
+    for (var i = 0; i < rows.length; i++) {
+        var cols = rows[i].querySelectorAll("th, td");
+        var row = [];
+        for (var j = 0; j < cols.length; j++) {
+            var text = cols[j].textContent.replace(/"/g, '""');
+            row.push('"' + text + '"');
+        }
+        csv.push(row.join(","));
+    }
+    var blob = new Blob([csv.join("\n")], {type: "text/csv"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "malariagen_results.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function buildResultHTML(data) {
+    var fragment = document.createDocumentFragment();
+
+    if (data.retried) {
+        var retryNote = document.createElement("p");
+        retryNote.className = "retry-note";
+        retryNote.textContent = "Initial query failed — automatically corrected and retried.";
+        fragment.appendChild(retryNote);
+    }
+
+    if (data.llm_response && data.llm_response.explanation) {
+        var explanation = document.createElement("p");
+        explanation.className = "result-explanation";
+        explanation.textContent = data.llm_response.explanation;
+        fragment.appendChild(explanation);
+    }
+
+    if (data.row_count !== null) {
+        var metaRow = document.createElement("div");
+        metaRow.className = "result-meta-row";
+        var meta = document.createElement("span");
+        meta.className = "result-meta";
+        meta.textContent = data.result_type + " — " + data.row_count + " rows";
+        metaRow.appendChild(meta);
+        if (data.result_html) {
+            var exportBtn = document.createElement("button");
+            exportBtn.className = "export-btn";
+            exportBtn.textContent = "Export CSV";
+            exportBtn.onclick = function() { exportCSV(exportBtn); };
+            metaRow.appendChild(exportBtn);
+        }
+        fragment.appendChild(metaRow);
+    }
+
+    if (data.result_html) {
+        var tableWrap = document.createElement("div");
+        tableWrap.className = "result-table-wrap";
+        tableWrap.innerHTML = data.result_html;
+        fragment.appendChild(tableWrap);
+    }
+
+    if (data.plot_json) {
+        if (data.plot_json.error) {
+            var plotErr = document.createElement("p");
+            plotErr.className = "error-text";
+            plotErr.textContent = "Plot error: " + data.plot_json.error;
+            fragment.appendChild(plotErr);
+        } else {
+            var plotWrap = document.createElement("div");
+            plotWrap.className = "result-plot-wrap";
+            var plotDiv = document.createElement("div");
+            plotDiv.id = "plot-" + Date.now();
+            plotWrap.appendChild(plotDiv);
+            fragment.appendChild(plotWrap);
+            setTimeout(function() {
+                Plotly.newPlot(plotDiv.id, data.plot_json.data, data.plot_json.layout, {responsive: true});
+            }, 50);
+        }
+    }
+
+    if (data.code_snippet) {
+        var codeBlock = document.createElement("details");
+        codeBlock.className = "code-details";
+        codeBlock.open = false;
+        var summary = document.createElement("summary");
+        summary.textContent = "View Python code";
+        codeBlock.appendChild(summary);
+        var codeWrap = document.createElement("div");
+        codeWrap.className = "code-wrap";
+        var copyBtn = document.createElement("button");
+        copyBtn.className = "copy-btn";
+        copyBtn.textContent = "Copy";
+        copyBtn.onclick = function() { copyCode(copyBtn); };
+        codeWrap.appendChild(copyBtn);
+        var pre = document.createElement("pre");
+        pre.textContent = data.code_snippet;
+        codeWrap.appendChild(pre);
+        codeBlock.appendChild(codeWrap);
+        fragment.appendChild(codeBlock);
+    }
+
+    var paramBlock = document.createElement("details");
+    paramBlock.className = "code-details";
+    var paramSummary = document.createElement("summary");
+    paramSummary.textContent = "View raw parameters";
+    paramBlock.appendChild(paramSummary);
+    var paramPre = document.createElement("pre");
+    paramPre.textContent = JSON.stringify(data.llm_response, null, 2);
+    paramBlock.appendChild(paramPre);
+    fragment.appendChild(paramBlock);
+
+    return fragment;
+}
+
+async function executeQuery() {
+    var input = document.getElementById("queryInput");
+    var query = input.value.trim();
+    if (!query) return;
+
+    appendMessage("user", query);
+    input.value = "";
+    document.getElementById("executeBtn").disabled = true;
+
+    var loadingBody = appendMessage("assistant", '<div class="loading-indicator"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>');
+
+    try {
+        var response = await fetch("/query", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({query: query})
+        });
+        var data = await response.json();
+
+        if (data.error) {
+            var errorMsg = data.error;
+            if (data.retry_error) errorMsg += "\n" + data.retry_error;
+            loadingBody.innerHTML = '<p class="error-text">' + errorMsg + '</p>';
+        } else {
+            loadingBody.innerHTML = "";
+            loadingBody.appendChild(buildResultHTML(data));
+        }
+    } catch (err) {
+        loadingBody.innerHTML = '<p class="error-text">Network error: ' + err.message + '</p>';
+    }
+
+    document.getElementById("executeBtn").disabled = false;
+    document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
+}
+
+document.getElementById("queryInput").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") executeQuery();
+});
+</script>
+{% endblock %}
