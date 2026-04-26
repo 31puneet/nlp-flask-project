@@ -2,7 +2,7 @@
 
 A natural-language interface for querying MalariaGEN genomic data. Users can ask questions in plain English — like *"How many samples are from Kenya?"* or *"Show kdr mutation frequencies in Kenya"* — and the system translates them into Python API calls, returning interactive data tables and Plotly visualizations.
 
-Built as a prototype for **GSoC 2025 — Project 2: Natural Language Interfaces for Genomic Data**.
+Built as a prototype for **GSoC 2026 — Project 2: Natural Language Interfaces for Genomic Data**.
 
 ## Features
 
