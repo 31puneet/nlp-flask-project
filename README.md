@@ -38,7 +38,7 @@ Built as a prototype for **GSoC 2026 — Project 2: Natural Language Interfaces 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/malariagen-nlp-portal.git
+git clone https://github.com/31puneet/malariagen-nlp-portal.git
 cd malariagen-nlp-portal
 ```
 
