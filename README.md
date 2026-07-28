@@ -6,7 +6,7 @@ Built as a prototype for **GSoC 2026 — Project 2: Natural Language Interfaces 
 
 ## Features
 
-- **Natural Language Queries** — Ask questions in plain English, no coding required
+- **Natural Language Queries** — Ask questions in plain English, no coding required.
 - **Interactive Visualizations** — Plotly charts for bar plots, time series, frequency distributions
 - **Data Tables** — Tabular results with CSV export
 - **Reproducible Code** — Every response includes the generated Python code with one-click copy
